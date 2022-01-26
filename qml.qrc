@@ -1,0 +1,18 @@
+<RCC>
+    <qresource prefix="/">
+        <file>GlobalIncludes.js</file>
+        <file>main.qml</file>
+        <file>MtxButton.qml</file>
+        <file>MtxComboBox.qml</file>
+        <file>MtxTextEdit.qml</file>
+        <file>MtxToggleButton.qml</file>
+        <file>PagePlotSpectra.qml</file>
+        <file>PagePlotTS.qml</file>
+        <file>PageScan.qml</file>
+        <file>PlotView.qml</file>
+        <file>qtquickcontrols2.conf</file>
+        <file>pics/busy.png</file>
+        <file>pics/metronix_Logo_einzeln_4c_09-2017.png</file>
+    </qresource>
+    <qresource prefix="/pics"/>
+</RCC>
