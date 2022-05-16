@@ -174,7 +174,7 @@ void TSStreamer::execHttpRangeRequest (const QString qstrRequest, const unsigned
 
     qstrTemp = "bytes=" + QString::number(uiStartPos) + "-" +QString::number(uiStartPos + uiNumBytes);
     pclRequest->setRawHeader (QByteArray("Range"),      QByteArray(qstrTemp.toStdString().c_str()));
-    pclRequest->setRawHeader (QByteArray("Keep-Alive"), QByteArray("1"));
+    pclRequest->setRawHeader (QByteArray("Keep-Alive"), QByteArray("10"));
     pclRequest->setRawHeader (QByteArray("timeout"),    QByteArray("5"));
 
     if (bUseSSL == true)
@@ -209,9 +209,17 @@ void TSStreamer::execHttpRangeRequest (const QString qstrRequest, const unsigned
 
     pclLoop->exec();
 
-    pclLoop->disconnect (this->pclNetworkreply, &QNetworkReply::finished,      this, &TSStreamer::onRangeRequestFinished);
-    pclLoop->disconnect (this->pclNetworkreply, &QIODevice::readyRead,         this, &TSStreamer::onRangeRequestReadyRead);
-    pclLoop->disconnect (this,                  SIGNAL (sigRequestFinished()), pclLoop, SLOT(quit ()));
+    try
+    {
+        pclLoop->disconnect (this->pclNetworkreply, &QNetworkReply::finished,      this, &TSStreamer::onRangeRequestFinished);
+        pclLoop->disconnect (this->pclNetworkreply, &QIODevice::readyRead,         this, &TSStreamer::onRangeRequestReadyRead);
+        pclLoop->disconnect (this,                  SIGNAL (sigRequestFinished()), pclLoop, SLOT(quit ()));
+    }
+    catch (...)
+    {
+        // do nothing - next request will fix this
+        qDebug () << "http request failed!";
+    }
 
     delete (pclLoop);
     delete (pclRequest);
@@ -606,40 +614,64 @@ void TSStreamer::showTSBufferScopeMode (void)
         unsigned int uiPos;
         QString      qstrTemp2;
         ATSHeader*   pclHeader;
-        int          iActMaxNumSamples = ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qvecATSHeaders[0].iSamples;
+        int          iActMaxNumSamples;
 
-        qDebug () << "show buffer scope mode triggered ...";
-
-        // first step: update ATS headers
-        for (iATSHeaderCounter = 0; iATSHeaderCounter < ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qvecATSFiles.size(); iATSHeaderCounter++)
+        if (this->qlMeasInfo.size() >= this->uiActiveMeasID)
         {
-            // read ATSHeader from file
-            if (((SystemInfo*) this->qlSystemInfo.at(this->uiActiveSystemID))->bUseHTTPS == true)
+            try
             {
-                qstrTemp2 = "https://" + this->qstrTargetIPAddress + "/data/" + ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qstrRootPath + "/" + ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qvecATSFiles[iATSHeaderCounter];
-                this->execHttpRangeRequest(qstrTemp2, 0, sizeof(ATSHeader), true);
+                iActMaxNumSamples = ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qvecATSHeaders[0].iSamples;
             }
-            else
+            catch (...)
             {
-                qstrTemp2 = "http://" + this->qstrTargetIPAddress + "/data/" + ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qstrRootPath + "/" + ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qvecATSFiles[iATSHeaderCounter];
-                this->execHttpRangeRequest(qstrTemp2, 0, sizeof(ATSHeader), false);
+                iActMaxNumSamples = -1;
             }
-
-            pclHeader = (ATSHeader*)this->qbaRequestResponse.data();
-            ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qvecATSHeaders[iATSHeaderCounter] = *pclHeader;
-            pclHeader = nullptr;
+        }
+        else
+        {
+            iActMaxNumSamples = -1;
         }
 
-        uiPos = ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qvecATSHeaders[0].iSamples;
-        qDebug () << "sample pos:" << uiPos;
-        uiPos = uiPos - this->uiWindowSize;
-        qDebug () << "sample pos:" << uiPos;
-
-        this->atomHttpAccessActive.store(false);
-
-        if (iActMaxNumSamples != ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qvecATSHeaders[0].iSamples)
+        if (iActMaxNumSamples <= 0)
         {
-            this->showTSBufferAtPos(uiPos);
+            qDebug () << "show buffer scope -> INVALID WINDOW SIZE OR NO MEAS SELECTED!";
+        }
+        else
+        {
+            qDebug () << "show buffer scope mode triggered ...";
+
+            // first step: update ATS headers
+            for (iATSHeaderCounter = 0; iATSHeaderCounter < ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qvecATSFiles.size(); iATSHeaderCounter++)
+            {
+                // read ATSHeader from file
+                if (((SystemInfo*) this->qlSystemInfo.at(this->uiActiveSystemID))->bUseHTTPS == true)
+                {
+                    qstrTemp2 = "https://" + this->qstrTargetIPAddress + "/data/" + ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qstrRootPath + "/" + ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qvecATSFiles[iATSHeaderCounter];
+                    this->execHttpRangeRequest(qstrTemp2, 0, sizeof(ATSHeader), true);
+                }
+                else
+                {
+                    qstrTemp2 = "http://" + this->qstrTargetIPAddress + "/data/" + ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qstrRootPath + "/" + ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qvecATSFiles[iATSHeaderCounter];
+                    this->execHttpRangeRequest(qstrTemp2, 0, sizeof(ATSHeader), false);
+                }
+
+                pclHeader = (ATSHeader*)this->qbaRequestResponse.data();
+                ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qvecATSHeaders[iATSHeaderCounter] = *pclHeader;
+                pclHeader = nullptr;
+            }
+
+            uiPos = ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qvecATSHeaders[0].iSamples;
+            qDebug () << "sample pos:" << uiPos;
+            uiPos = uiPos - this->uiWindowSize;
+            qDebug () << "sample pos:" << uiPos;
+
+            this->atomHttpAccessActive.store(false);
+
+            if ((uiPos < ((MeasInfo*)this->qlMeasInfo [this->uiActiveMeasID])->qvecATSHeaders[0].iSamples) &&
+                (uiPos > 0))
+            {
+                this->showTSBufferAtPos(uiPos);
+            }
         }
     }
 }

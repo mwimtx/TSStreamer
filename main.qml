@@ -214,6 +214,36 @@ ApplicationWindow
         }
     }
 
+    Popup {
+        id: popupBusyInfo
+        height: mainWindow.height / 2
+        width: mainWindow.width / 2
+        y: mainWindow.height / 4
+        x: mainWindow.width / 4
+        visible: false
+        padding: GlobalIncludes.mtxBorderLineStrength
+        closePolicy: Popup.NoAutoClose
+
+        Rectangle {
+            anchors.fill: parent
+            border.width: GlobalIncludes.mtxBorderLineStrength
+            border.color: GlobalIncludes.mtxFontColor
+
+            Image {
+                id: infoSearchMeasBusy
+                horizontalAlignment: parent.AlignHCenter
+                verticalAlignment: parent.AlignVCenter
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.verticalCenter: parent.verticalCenter
+                height: drawerUtils.height * 0.5
+                width: infoSearchMeasBusy.height
+                visible: true
+                source: "/pics/busy.png"
+                fillMode: Image.PreserveAspectFit
+                NumberAnimation on rotation { duration: 3000; from:0; to: 360; loops: Animation.Infinite}
+            }
+        }
+    }
 
     Popup {
         id: popupShowValues
@@ -323,6 +353,7 @@ ApplicationWindow
         edge: Qt.BottomEdge
         dragMargin: GlobalIncludes.mtxFontSizeNormal * 1.5
 
+
         Timer {
             id: timerDirectConnectTSScopeMode1
             interval: 500
@@ -333,7 +364,7 @@ ApplicationWindow
                 if (tsStreamer.directOpenTSScopeMode == true)
                 {
                     tsStreamer.selectMeas(0);
-                    toggleScopeMode.checked = Qt.Checked;
+                    toggleScopeMode.checked = false;
                     tsStreamer.directOpenTSScopeMode = false;
                     timerDirectConnectTSScopeMode2.start()
                 }
@@ -347,7 +378,7 @@ ApplicationWindow
             running : false
             triggeredOnStart: false
             onTriggered: {
-                toggleScopeMode.checked = Qt.Unchecked;
+                toggleScopeMode.checked = false;
                 drawerUtils.close();
             }
         }
@@ -393,8 +424,40 @@ ApplicationWindow
                                 Layout.fillWidth: true
                                 text: "Search For Measurements"
 
+                                Timer {
+                                   id: searchMeasTimer
+                                   interval: 1200
+                                   repeat: false
+                                   running: false
+                                   triggeredOnStart: false
+                                   onTriggered: {
+                                       // start scan
+                                       tsStreamer.readMeasInfoFromTarget();
+
+                                       // reset global flag that search for TS is currently active
+                                       GlobalIncludes.bTSScanActive = false;
+
+                                       popupBusyInfo.visible = false;
+                                   }
+                                }
+
                                 onClicked: {
-                                    tsStreamer.readMeasInfoFromTarget();
+                                    popupBusyInfo.visible = true;
+
+                                    // reset global flag that search for TS is currently active
+                                    GlobalIncludes.bTSScanActive = true;
+
+                                    // stop scope mode
+                                    if (toggleScopeMode.checked == false)
+                                    {
+                                        toggleScopeMode.checked = true;
+                                    }
+
+                                    // set global flag that search for TS is currently active
+                                    GlobalIncludes.bTSScanActive = true;
+
+                                    // start search
+                                    searchMeasTimer.start();
                                 }
                             }
 
@@ -444,15 +507,18 @@ ApplicationWindow
                                                 MouseArea {
                                                     anchors.fill: parent
                                                     onClicked: {
-                                                        if (toggleScopeMode.checked == false)
+
+                                                        // as long as scan is active, do not do anything (change meas)
+                                                        if (GlobalIncludes.bTSScanActive === false)
                                                         {
-                                                            toggleScopeMode.checked = true;
+                                                            // stop scope mode
+                                                            if (toggleScopeMode.checked == false)
+                                                            {
+                                                                toggleScopeMode.checked = true;
+                                                            }
+
+                                                            // select new measurement
                                                             measChangedTimer.start();
-                                                        }
-                                                        else
-                                                        {
-                                                            drawerUtils.close ();
-                                                            tsStreamer.selectMeas(modelData.measID);
                                                         }
                                                     }
                                                 }
@@ -466,7 +532,6 @@ ApplicationWindow
                                                    onTriggered: {
                                                        drawerUtils.close ();
                                                        tsStreamer.selectMeas(modelData.measID);
-                                                       toggleScopeMode.checked = false
                                                    }
                                                 }
 
@@ -637,8 +702,8 @@ ApplicationWindow
                                            onTriggered: {
                                                if (toggleScopeMode.checked == false)
                                                {
-                                                   toggleScopeMode.checked = true
-                                                   indexChangedTimer2.start()
+                                                   toggleScopeMode.checked = true;
+                                                   indexChangedTimer2.start();
                                                }
                                                else
                                                {
@@ -655,7 +720,7 @@ ApplicationWindow
                                            triggeredOnStart: false
                                            onTriggered: {
                                                tsStreamer.setWindowSize(parent.currentText, false);
-                                               toggleScopeMode.checked = false
+                                               toggleScopeMode.checked = false;
                                            }
                                         }
 
@@ -708,11 +773,13 @@ ApplicationWindow
                                     {
                                         toggleScopeMode.text = "Scope Mode: Inactive"
                                         timerUpdateScopeBuffer.stop ();
+                                        GlobalIncludes.bScopeModeActive = false;
                                     }
                                     else
                                     {
                                         toggleScopeMode.text = "Scope Mode: Active"
                                         timerUpdateScopeBuffer.start();
+                                        GlobalIncludes.bScopeModeActive = true;
                                     }
                                 }
                             }
