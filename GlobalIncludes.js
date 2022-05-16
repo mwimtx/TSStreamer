@@ -41,3 +41,10 @@ var mtxLedOff = "lightgrey"
 // colors for listviews
 var mtxListViewEvenItemColor = "#DDE8FF"
 var mtxListViewOddItemColor = "white"
+
+// flag, that TS scan is currently active
+var bTSScanActive = false
+
+// flag, that scope mode is currently active
+var bScopeModeActive = false
+
